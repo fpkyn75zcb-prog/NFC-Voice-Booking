@@ -2,33 +2,92 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#111111">
-  <title>NFC Voice Booking</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f5f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Book an Appointment</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
-    <section class="card">
-      <div class="badge">NFC VOICE BOOKING</div>
-      <h1>Book an appointment</h1>
-      <p class="intro">Tap the microphone and tell us what you need.</p>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-dot"></span><span>Booking</span></div>
+      <span class="secure">Secure booking</span>
+    </header>
 
-      <button id="talk" class="talk" type="button" aria-label="Start voice booking">🎙</button>
-      <p id="status" class="status">Ready</p>
+    <section class="hero" aria-labelledby="title">
+      <p class="eyebrow">WELCOME</p>
+      <h1 id="title">Your time.<br><span>Made simple.</span></h1>
+      <p class="subtitle">Book an appointment in a few taps, or use your voice.</p>
+    </section>
 
-      <div id="conversation" class="conversation" aria-live="polite"></div>
+    <section class="voice-card" aria-label="Voice booking">
+      <div class="voice-copy">
+        <span class="live-dot" aria-hidden="true"></span>
+        <div>
+          <strong>Voice booking</strong>
+          <p id="status">Ready when you are.</p>
+        </div>
+      </div>
+      <button id="talk" class="talk" type="button" aria-label="Start voice booking">
+        <span class="mic-icon" aria-hidden="true">⌕</span>
+        <span class="talk-label">Talk</span>
+      </button>
+    </section>
 
-      <form id="bookingForm" class="booking-form">
+    <section class="quick-actions" aria-label="Quick booking actions">
+      <button type="button" class="quick" data-focus="service"><span>Service</span><b id="serviceSummary">Choose</b></button>
+      <button type="button" class="quick" data-focus="date"><span>Date</span><b id="dateSummary">Choose</b></button>
+      <button type="button" class="quick" data-focus="time"><span>Time</span><b id="timeSummary">Choose</b></button>
+    </section>
+
+    <section id="conversation" class="conversation" aria-live="polite"></section>
+
+    <form id="bookingForm" class="booking-form">
+      <div class="section-heading"><p class="eyebrow">APPOINTMENT</p><h2>Tell us what you need.</h2></div>
+
+      <label>Service
+        <select id="service" required>
+          <option value="" selected disabled>Select a service</option>
+          <option value="Consultation">Consultation</option>
+          <option value="Cleaning">Cleaning</option>
+          <option value="Service appointment">Service appointment</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+
+      <div class="two-col">
         <label>Name<input id="name" required autocomplete="name" placeholder="Your name"></label>
-        <label>Phone<input id="phone" required autocomplete="tel" placeholder="Phone number"></label>
+        <label>Phone<input id="phone" required autocomplete="tel" inputmode="tel" placeholder="Phone number"></label>
+      </div>
+
+      <div class="two-col">
         <label>Date<input id="date" required type="date"></label>
         <label>Time<input id="time" required type="time"></label>
-        <button class="book" type="submit">Confirm appointment</button>
-      </form>
+      </div>
 
-      <div id="confirmation" class="confirmation" hidden></div>
+      <button class="book" type="submit">Review appointment <span>→</span></button>
+    </form>
+
+    <section id="review" class="review" hidden>
+      <div class="section-heading"><p class="eyebrow">REVIEW</p><h2>Everything look right?</h2></div>
+      <div id="reviewDetails" class="review-details"></div>
+      <div class="review-actions">
+        <button id="editBooking" type="button" class="secondary">Edit</button>
+        <button id="confirmBooking" type="button" class="book">Confirm booking <span>→</span></button>
+      </div>
     </section>
+
+    <section id="confirmation" class="confirmation" hidden>
+      <div class="check">✓</div>
+      <p class="eyebrow">CONFIRMED</p>
+      <h2>You're booked.</h2>
+      <p id="confirmationText"></p>
+      <button id="newBooking" type="button" class="secondary">Book another</button>
+    </section>
+
+    <footer>Powered by NFC Voice Booking</footer>
   </main>
   <script src="app.js"></script>
 </body>
