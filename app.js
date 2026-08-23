@@ -1,123 +1,116 @@
-const CONFIG = {
-  // Leave blank for local demo mode. Paste your Google Apps Script /exec URL here after setup.
-  API_URL: "",
-  AGENT_ID: new URLSearchParams(window.location.search).get("agent") || "KINGDOM001"
-};
+const API_URL = "https://script.google.com/macros/s/AKfycby2w2xMuOxUmh3Py08n67dNgQshw2_bkwQ6I05d5demBz6zYfFPBREXN0naIggflK0R/exec";
+
+const params = new URLSearchParams(window.location.search);
+const agent = params.get("agent") || "KINGDOM001";
 
 const talk = document.getElementById("talk");
 const status = document.getElementById("status");
 const conversation = document.getElementById("conversation");
-const form = document.getElementById("bookingForm");
-const confirmation = document.getElementById("confirmation");
-const dateInput = document.getElementById("date");
+const booking = document.getElementById("booking");
+const bookButton = document.getElementById("book");
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-const recognition = SpeechRecognition ? new SpeechRecognition() : null;
-
-function localDateString() {
-  const d = new Date();
-  const offset = d.getTimezoneOffset();
-  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
-}
-
-dateInput.min = localDateString();
-
-document.title = `${CONFIG.AGENT_ID} — NFC Voice Booking`;
+let recognition = null;
 
 function addMessage(who, text) {
   const p = document.createElement("p");
   const strong = document.createElement("strong");
   strong.textContent = `${who}: `;
-  p.append(strong, text);
+  p.appendChild(strong);
+  p.appendChild(document.createTextNode(text));
   conversation.appendChild(p);
 }
 
 function speak(text) {
   addMessage("Agent", text);
   if ("speechSynthesis" in window) {
-    speechSynthesis.cancel();
-    speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    window.speechSynthesis.cancel();
+    const voice = new SpeechSynthesisUtterance(text);
+    voice.lang = "en-US";
+    window.speechSynthesis.speak(voice);
   }
-}
-
-function showBookingForm() {
-  form.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 function handleVoiceCommand(text) {
   const lower = text.toLowerCase();
-  addMessage("You", text);
-
-  if (/book|appointment|schedule|reserve/.test(lower)) {
-    speak("Sure. Enter your name, phone number, date and time, then confirm the appointment.");
-    showBookingForm();
-  } else {
-    speak("I can help you book an appointment. Say book an appointment to begin.");
+  if (lower.includes("appointment") || lower.includes("book") || lower.includes("schedule")) {
+    booking.style.display = "block";
+    speak("Sure. Please enter your name, phone number, date and time, then press Book Appointment.");
+    return;
   }
+  speak("I can help you book an appointment. Say book an appointment to begin.");
 }
 
-if (recognition) {
+if (SpeechRecognition) {
+  recognition = new SpeechRecognition();
   recognition.lang = "en-US";
   recognition.continuous = false;
   recognition.interimResults = false;
 
   talk.addEventListener("click", () => {
     status.textContent = "Listening...";
-    try { recognition.start(); } catch (_) {}
+    try {
+      recognition.start();
+    } catch (_) {}
   });
 
-  recognition.onresult = (event) => {
-    status.textContent = "Ready";
-    handleVoiceCommand(event.results[0][0].transcript);
-  };
+  recognition.addEventListener("result", (event) => {
+    const text = event.results[0][0].transcript;
+    addMessage("You", text);
+    status.textContent = "I heard you.";
+    handleVoiceCommand(text);
+  });
 
-  recognition.onerror = () => {
-    status.textContent = "Voice input failed. Try again or use the form.";
-  };
+  recognition.addEventListener("error", () => {
+    status.textContent = "I couldn't hear that. Tap Talk and try again.";
+  });
 
-  recognition.onend = () => {
-    if (status.textContent === "Listening...") status.textContent = "Ready";
-  };
+  recognition.addEventListener("end", () => {
+    if (status.textContent === "Listening...") status.textContent = "Ready.";
+  });
 } else {
+  status.textContent = "Voice recognition is not supported in this browser. Use Safari or Chrome on a supported device.";
   talk.disabled = true;
-  status.textContent = "Voice recognition is not supported here. Use the form below.";
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  const booking = {
+bookButton.addEventListener("click", async () => {
+  const data = {
     name: document.getElementById("name").value.trim(),
     phone: document.getElementById("phone").value.trim(),
-    date: dateInput.value,
+    date: document.getElementById("date").value,
     time: document.getElementById("time").value,
-    agent: CONFIG.AGENT_ID,
-    createdAt: new Date().toISOString()
+    agent
   };
 
-  if (!booking.name || !booking.phone || !booking.date || !booking.time) return;
-
-  if (CONFIG.API_URL) {
-    try {
-      const response = await fetch(CONFIG.API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(booking)
-      });
-      if (!response.ok) throw new Error("Booking request failed");
-    } catch (error) {
-      status.textContent = "The booking server is unavailable.";
-      return;
-    }
-  } else {
-    const bookings = JSON.parse(localStorage.getItem("nfcBookings") || "[]");
-    bookings.push(booking);
-    localStorage.setItem("nfcBookings", JSON.stringify(bookings));
+  if (!data.name || !data.phone || !data.date || !data.time) {
+    speak("Please complete your name, phone number, date and time.");
+    return;
   }
 
-  confirmation.hidden = false;
-  confirmation.textContent = `Appointment requested: ${booking.name}, ${booking.date} at ${booking.time}.`;
-  speak(`Your appointment request is recorded for ${booking.date} at ${booking.time}.`);
-  form.reset();
-  dateInput.min = localDateString();
+  bookButton.disabled = true;
+  status.textContent = "Booking your appointment...";
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!result.success) throw new Error("Booking was not accepted.");
+
+    status.textContent = "Appointment confirmed.";
+    speak(`Your appointment is booked for ${data.date} at ${data.time}.`);
+    localStorage.setItem("lastBooking", JSON.stringify(data));
+  } catch (error) {
+    console.error(error);
+    status.textContent = "The booking could not be completed.";
+    speak("I could not complete the booking. Please check the connection and try again.");
+  } finally {
+    bookButton.disabled = false;
+  }
 });
+
+if (booking) booking.style.display = "block";
