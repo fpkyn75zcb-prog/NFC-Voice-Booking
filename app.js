@@ -49,9 +49,7 @@ if (SpeechRecognition) {
 
   talk.addEventListener("click", () => {
     status.textContent = "Listening...";
-    try {
-      recognition.start();
-    } catch (_) {}
+    try { recognition.start(); } catch (_) {}
   });
 
   recognition.addEventListener("result", (event) => {
@@ -64,16 +62,44 @@ if (SpeechRecognition) {
   recognition.addEventListener("error", () => {
     status.textContent = "I couldn't hear that. Tap the microphone and try again.";
   });
-
-  recognition.addEventListener("end", () => {
-    if (status.textContent === "Listening...") status.textContent = "Ready";
-  });
 } else {
-  status.textContent = "Voice recognition is not supported in this browser. Use a supported Chrome or Safari browser.";
+  status.textContent = "Voice recognition is not supported in this browser. Use supported Chrome or Safari.";
   talk.disabled = true;
 }
 
-bookingForm.addEventListener("submit", async (event) => {
+function submitToAppsScript(data) {
+  // A normal HTML form POST avoids browser CORS/fetch restrictions and works
+  // with Google Apps Script web-app redirects.
+  const frameName = `bookingFrame_${Date.now()}`;
+  const iframe = document.createElement("iframe");
+  iframe.name = frameName;
+  iframe.style.display = "none";
+  document.body.appendChild(iframe);
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = API_URL;
+  form.target = frameName;
+  form.style.display = "none";
+
+  Object.entries(data).forEach(([key, value]) => {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
+
+  setTimeout(() => {
+    form.remove();
+    iframe.remove();
+  }, 10000);
+}
+
+bookingForm.addEventListener("submit", (event) => {
   event.preventDefault();
 
   const submitButton = bookingForm.querySelector("button[type='submit']");
@@ -91,22 +117,14 @@ bookingForm.addEventListener("submit", async (event) => {
   }
 
   submitButton.disabled = true;
-  status.textContent = "Booking your appointment...";
+  status.textContent = "Submitting appointment...";
 
   try {
-    // Google Apps Script redirects its web-app response. Using a simple text/plain
-    // request avoids a browser CORS preflight. The response is intentionally opaque.
-    await fetch(API_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify(data)
-    });
-
+    submitToAppsScript(data);
     localStorage.setItem("lastBooking", JSON.stringify(data));
-    status.textContent = "Appointment submitted.";
     confirmation.hidden = false;
-    confirmation.textContent = `Appointment submitted for ${data.date} at ${data.time}.`;
+    confirmation.innerHTML = `<strong>Appointment submitted</strong>${data.date} at ${data.time}`;
+    status.textContent = "Appointment submitted.";
     speak(`Your appointment request was submitted for ${data.date} at ${data.time}.`);
     bookingForm.reset();
   } catch (error) {
