@@ -7,10 +7,24 @@ const talk = document.getElementById("talk");
 const status = document.getElementById("status");
 const conversation = document.getElementById("conversation");
 const bookingForm = document.getElementById("bookingForm");
+const review = document.getElementById("review");
+const reviewDetails = document.getElementById("reviewDetails");
 const confirmation = document.getElementById("confirmation");
+const confirmationText = document.getElementById("confirmationText");
+const editBooking = document.getElementById("editBooking");
+const confirmBooking = document.getElementById("confirmBooking");
+const newBooking = document.getElementById("newBooking");
 
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-let recognition = null;
+const fields = {
+  service: document.getElementById("service"),
+  name: document.getElementById("name"),
+  phone: document.getElementById("phone"),
+  date: document.getElementById("date"),
+  time: document.getElementById("time")
+};
+
+// Keep customers from selecting a past date.
+fields.date.min = new Date().toISOString().slice(0, 10);
 
 function addMessage(who, text) {
   const p = document.createElement("p");
@@ -31,15 +45,67 @@ function speak(text) {
   }
 }
 
+function formatDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "full" }).format(new Date(`${value}T12:00:00`));
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  const [hour, minute] = value.split(":");
+  const date = new Date();
+  date.setHours(Number(hour), Number(minute), 0, 0);
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+}
+
+function syncQuickActions() {
+  document.getElementById("serviceSummary").textContent = fields.service.value || "Choose";
+  document.getElementById("dateSummary").textContent = fields.date.value ? formatDate(fields.date.value).split(",")[0] : "Choose";
+  document.getElementById("timeSummary").textContent = fields.time.value ? formatTime(fields.time.value) : "Choose";
+}
+
+Object.values(fields).forEach((field) => field.addEventListener("input", syncQuickActions));
+Object.values(fields).forEach((field) => field.addEventListener("change", syncQuickActions));
+
+document.querySelectorAll(".quick").forEach((button) => {
+  button.addEventListener("click", () => {
+    const field = document.getElementById(button.dataset.focus);
+    field?.focus();
+    field?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+});
+
 function handleVoiceCommand(text) {
   const lower = text.toLowerCase();
-  if (lower.includes("appointment") || lower.includes("book") || lower.includes("schedule")) {
-    bookingForm.scrollIntoView({ behavior: "smooth", block: "center" });
-    speak("Sure. Please enter your name, phone number, date and time, then confirm the appointment.");
-    return;
+  addMessage("You", text);
+
+  if (lower.includes("cleaning")) fields.service.value = "Cleaning";
+  else if (lower.includes("consultation")) fields.service.value = "Consultation";
+  else if (lower.includes("service")) fields.service.value = "Service appointment";
+
+  const dateMatch = lower.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+  if (dateMatch) {
+    let year = dateMatch[3];
+    if (year.length === 2) year = `20${year}`;
+    fields.date.value = `${year}-${dateMatch[1].padStart(2, "0")}-${dateMatch[2].padStart(2, "0")}`;
   }
-  speak("I can help you book an appointment. Say book an appointment to begin.");
+
+  const timeMatch = lower.match(/\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/);
+  if (timeMatch) {
+    let hour = Number(timeMatch[1]);
+    const minute = timeMatch[2] || "00";
+    if (timeMatch[3] === "pm" && hour < 12) hour += 12;
+    if (timeMatch[3] === "am" && hour === 12) hour = 0;
+    fields.time.value = `${String(hour).padStart(2, "0")}:${minute}`;
+  }
+
+  syncQuickActions();
+  bookingForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  speak("I filled in what I understood. Review the details and continue when ready.");
 }
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
 
 if (SpeechRecognition) {
   recognition = new SpeechRecognition();
@@ -48,28 +114,76 @@ if (SpeechRecognition) {
   recognition.interimResults = false;
 
   talk.addEventListener("click", () => {
-    status.textContent = "Listening...";
+    status.textContent = "Listening…";
+    talk.classList.add("listening");
     try { recognition.start(); } catch (_) {}
   });
 
   recognition.addEventListener("result", (event) => {
-    const text = event.results[0][0].transcript;
-    addMessage("You", text);
-    status.textContent = "I heard you.";
-    handleVoiceCommand(text);
+    handleVoiceCommand(event.results[0][0].transcript);
+    status.textContent = "Ready when you are.";
+    talk.classList.remove("listening");
   });
 
   recognition.addEventListener("error", () => {
-    status.textContent = "I couldn't hear that. Tap the microphone and try again.";
+    status.textContent = "I couldn't hear that. Try again.";
+    talk.classList.remove("listening");
   });
+
+  recognition.addEventListener("end", () => talk.classList.remove("listening"));
 } else {
-  status.textContent = "Voice recognition is not supported in this browser. Use supported Chrome or Safari.";
+  status.textContent = "Voice isn't supported here. You can still book below.";
   talk.disabled = true;
 }
 
+function showReview() {
+  const data = getBookingData();
+  reviewDetails.innerHTML = "";
+  const rows = [
+    ["Service", data.service],
+    ["Name", data.name],
+    ["Phone", data.phone],
+    ["Date", formatDate(data.date)],
+    ["Time", formatTime(data.time)]
+  ];
+  rows.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "review-row";
+    row.innerHTML = `<span>${label}</span>`;
+    const strong = document.createElement("strong");
+    strong.textContent = value;
+    row.appendChild(strong);
+    reviewDetails.appendChild(row);
+  });
+  review.hidden = false;
+  bookingForm.hidden = true;
+  review.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function getBookingData() {
+  return {
+    service: fields.service.value,
+    name: fields.name.value.trim(),
+    phone: fields.phone.value.trim(),
+    date: fields.date.value,
+    time: fields.time.value,
+    agent
+  };
+}
+
+bookingForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!bookingForm.reportValidity()) return;
+  showReview();
+});
+
+editBooking.addEventListener("click", () => {
+  review.hidden = true;
+  bookingForm.hidden = false;
+  bookingForm.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
 function submitToAppsScript(data) {
-  // A normal HTML form POST avoids browser CORS/fetch restrictions and works
-  // with Google Apps Script web-app redirects.
   const frameName = `bookingFrame_${Date.now()}`;
   const iframe = document.createElement("iframe");
   iframe.name = frameName;
@@ -92,46 +206,38 @@ function submitToAppsScript(data) {
 
   document.body.appendChild(form);
   form.submit();
-
-  setTimeout(() => {
-    form.remove();
-    iframe.remove();
-  }, 10000);
+  setTimeout(() => { form.remove(); iframe.remove(); }, 10000);
 }
 
-bookingForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-
-  const submitButton = bookingForm.querySelector("button[type='submit']");
-  const data = {
-    name: document.getElementById("name").value.trim(),
-    phone: document.getElementById("phone").value.trim(),
-    date: document.getElementById("date").value,
-    time: document.getElementById("time").value,
-    agent
-  };
-
-  if (!data.name || !data.phone || !data.date || !data.time) {
-    speak("Please complete your name, phone number, date and time.");
-    return;
-  }
-
-  submitButton.disabled = true;
-  status.textContent = "Submitting appointment...";
+confirmBooking.addEventListener("click", () => {
+  const data = getBookingData();
+  confirmBooking.disabled = true;
+  status.textContent = "Securing your appointment…";
 
   try {
     submitToAppsScript(data);
     localStorage.setItem("lastBooking", JSON.stringify(data));
+    review.hidden = true;
     confirmation.hidden = false;
-    confirmation.innerHTML = `<strong>Appointment submitted</strong>${data.date} at ${data.time}`;
-    status.textContent = "Appointment submitted.";
-    speak(`Your appointment request was submitted for ${data.date} at ${data.time}.`);
-    bookingForm.reset();
+    confirmationText.textContent = `${data.service} · ${formatDate(data.date)} · ${formatTime(data.time)}. A booking request has been submitted.`;
+    status.textContent = "Booking submitted.";
+    speak(`Your ${data.service.toLowerCase()} request was submitted for ${formatDate(data.date)} at ${formatTime(data.time)}.`);
+    confirmation.scrollIntoView({ behavior: "smooth", block: "center" });
   } catch (error) {
     console.error(error);
-    status.textContent = "The booking could not be submitted.";
-    speak("I could not submit the appointment. Please try again.");
+    status.textContent = "Something went wrong. Please try again.";
   } finally {
-    submitButton.disabled = false;
+    confirmBooking.disabled = false;
   }
 });
+
+newBooking.addEventListener("click", () => {
+  bookingForm.reset();
+  review.hidden = true;
+  confirmation.hidden = true;
+  bookingForm.hidden = false;
+  syncQuickActions();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+syncQuickActions();
