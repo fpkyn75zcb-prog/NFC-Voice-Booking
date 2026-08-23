@@ -6,8 +6,8 @@ const agent = params.get("agent") || "KINGDOM001";
 const talk = document.getElementById("talk");
 const status = document.getElementById("status");
 const conversation = document.getElementById("conversation");
-const booking = document.getElementById("booking");
-const bookButton = document.getElementById("book");
+const bookingForm = document.getElementById("bookingForm");
+const confirmation = document.getElementById("confirmation");
 
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
@@ -34,8 +34,8 @@ function speak(text) {
 function handleVoiceCommand(text) {
   const lower = text.toLowerCase();
   if (lower.includes("appointment") || lower.includes("book") || lower.includes("schedule")) {
-    booking.style.display = "block";
-    speak("Sure. Please enter your name, phone number, date and time, then press Book Appointment.");
+    bookingForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    speak("Sure. Please enter your name, phone number, date and time, then confirm the appointment.");
     return;
   }
   speak("I can help you book an appointment. Say book an appointment to begin.");
@@ -62,18 +62,21 @@ if (SpeechRecognition) {
   });
 
   recognition.addEventListener("error", () => {
-    status.textContent = "I couldn't hear that. Tap Talk and try again.";
+    status.textContent = "I couldn't hear that. Tap the microphone and try again.";
   });
 
   recognition.addEventListener("end", () => {
-    if (status.textContent === "Listening...") status.textContent = "Ready.";
+    if (status.textContent === "Listening...") status.textContent = "Ready";
   });
 } else {
-  status.textContent = "Voice recognition is not supported in this browser. Use Safari or Chrome on a supported device.";
+  status.textContent = "Voice recognition is not supported in this browser. Use a supported Chrome or Safari browser.";
   talk.disabled = true;
 }
 
-bookButton.addEventListener("click", async () => {
+bookingForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const submitButton = bookingForm.querySelector("button[type='submit']");
   const data = {
     name: document.getElementById("name").value.trim(),
     phone: document.getElementById("phone").value.trim(),
@@ -87,30 +90,30 @@ bookButton.addEventListener("click", async () => {
     return;
   }
 
-  bookButton.disabled = true;
+  submitButton.disabled = true;
   status.textContent = "Booking your appointment...";
 
   try {
-    const response = await fetch(API_URL, {
+    // Google Apps Script redirects its web-app response. Using a simple text/plain
+    // request avoids a browser CORS preflight. The response is intentionally opaque.
+    await fetch(API_URL, {
       method: "POST",
+      mode: "no-cors",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(data)
     });
 
-    const result = await response.json();
-
-    if (!result.success) throw new Error("Booking was not accepted.");
-
-    status.textContent = "Appointment confirmed.";
-    speak(`Your appointment is booked for ${data.date} at ${data.time}.`);
     localStorage.setItem("lastBooking", JSON.stringify(data));
+    status.textContent = "Appointment submitted.";
+    confirmation.hidden = false;
+    confirmation.textContent = `Appointment submitted for ${data.date} at ${data.time}.`;
+    speak(`Your appointment request was submitted for ${data.date} at ${data.time}.`);
+    bookingForm.reset();
   } catch (error) {
     console.error(error);
-    status.textContent = "The booking could not be completed.";
-    speak("I could not complete the booking. Please check the connection and try again.");
+    status.textContent = "The booking could not be submitted.";
+    speak("I could not submit the appointment. Please try again.");
   } finally {
-    bookButton.disabled = false;
+    submitButton.disabled = false;
   }
 });
-
-if (booking) booking.style.display = "block";
