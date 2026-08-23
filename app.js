@@ -1,5 +1,8 @@
-const API_URL = ""; // Add your Google Apps Script web-app URL here when ready.
-const AGENT_ID = "KINGDOM001";
+const CONFIG = {
+  // Leave blank for local demo mode. Paste your Google Apps Script /exec URL here after setup.
+  API_URL: "",
+  AGENT_ID: new URLSearchParams(window.location.search).get("agent") || "KINGDOM001"
+};
 
 const talk = document.getElementById("talk");
 const status = document.getElementById("status");
@@ -11,12 +14,21 @@ const dateInput = document.getElementById("date");
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 const recognition = SpeechRecognition ? new SpeechRecognition() : null;
 
-const today = new Date();
-dateInput.min = today.toISOString().slice(0, 10);
+function localDateString() {
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - offset * 60000).toISOString().slice(0, 10);
+}
+
+dateInput.min = localDateString();
+
+document.title = `${CONFIG.AGENT_ID} — NFC Voice Booking`;
 
 function addMessage(who, text) {
   const p = document.createElement("p");
-  p.innerHTML = `<strong>${who}:</strong> ${text}`;
+  const strong = document.createElement("strong");
+  strong.textContent = `${who}: `;
+  p.append(strong, text);
   conversation.appendChild(p);
 }
 
@@ -79,15 +91,15 @@ form.addEventListener("submit", async (event) => {
     phone: document.getElementById("phone").value.trim(),
     date: dateInput.value,
     time: document.getElementById("time").value,
-    agent: AGENT_ID,
+    agent: CONFIG.AGENT_ID,
     createdAt: new Date().toISOString()
   };
 
   if (!booking.name || !booking.phone || !booking.date || !booking.time) return;
 
-  if (API_URL) {
+  if (CONFIG.API_URL) {
     try {
-      const response = await fetch(API_URL, {
+      const response = await fetch(CONFIG.API_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify(booking)
@@ -98,15 +110,14 @@ form.addEventListener("submit", async (event) => {
       return;
     }
   } else {
-    // Demo mode: keep the booking on this device until a backend is connected.
     const bookings = JSON.parse(localStorage.getItem("nfcBookings") || "[]");
     bookings.push(booking);
     localStorage.setItem("nfcBookings", JSON.stringify(bookings));
   }
 
   confirmation.hidden = false;
-  confirmation.innerHTML = `<strong>Appointment requested</strong>${booking.name}, ${booking.date} at ${booking.time}.`;
+  confirmation.textContent = `Appointment requested: ${booking.name}, ${booking.date} at ${booking.time}.`;
   speak(`Your appointment request is recorded for ${booking.date} at ${booking.time}.`);
   form.reset();
-  dateInput.min = new Date().toISOString().slice(0, 10);
+  dateInput.min = localDateString();
 });
